@@ -10,30 +10,113 @@ export default function Home() {
   const [includeSymbols, setIncludeSymbols] = useState(true);
   const [includeUppercase, setIncludeUppercase] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [strength, setStrength] = useState(0);
 
-  const generatePassword = useCallback(() => {
+  // Function to calculate password strength
+  const calculateStrength = (pwd: string) => {
+    if (pwd.length === 0) return 0;
+    
+    let score = 0;
+    
+    // Length check
+    if (pwd.length >= 8) score += 1;
+    if (pwd.length >= 12) score += 1;
+    
+    // Complexity check
+    if (/[A-Z]/.test(pwd)) score += 1;
+    if (/[a-z]/.test(pwd)) score += 1;
+    if (/[0-9]/.test(pwd)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+    
+    return score;
+  };
+
+  useEffect(() => {
+    setStrength(calculateStrength(password));
+  }, [password]);
+
+  // Modified to accept optional parameters for immediate updates
+  const generatePassword = useCallback((
+    len = length, 
+    incNum = includeNumbers, 
+    incSym = includeSymbols, 
+    incUpper = includeUppercase
+  ) => {
     let charset = "abcdefghijklmnopqrstuvwxyz";
-    if (includeUppercase) charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    if (includeNumbers) charset += "0123456789";
-    if (includeSymbols) charset += "!@#$%^&*()_+~`|}{[]:;?><,./-=";
+    if (incUpper) charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    if (incNum) charset += "0123456789";
+    if (incSym) charset += "!@#$%^&*()_+~`|}{[]:;?><,./-=";
 
     let newPassword = "";
-    for (let i = 0; i < length; i++) {
+    for (let i = 0; i < len; i++) {
       newPassword += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     setPassword(newPassword);
-  }, [length, includeUppercase, includeNumbers, includeSymbols]);
+  }, [length, includeNumbers, includeSymbols, includeUppercase]);
 
-  // Generate on initial load
+  // Generate ONLY on initial load
   useEffect(() => {
-    generatePassword();
-  }, [generatePassword]);
+    generatePassword(12, true, true, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCopy = () => {
     if (!password) return;
     navigator.clipboard.writeText(password);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Handle manual password input
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    // Allow typical password characters
+    if (/^[a-zA-Z0-9!@#$%^&*()_+~`|}{[\]:;?><,./\-=]*$/.test(newPassword)) {
+      setPassword(newPassword);
+      // Update length slider to match if within range
+      if (newPassword.length >= 8 && newPassword.length <= 32) {
+        setLength(newPassword.length);
+        // CRITICAL FIX: Do NOT call generatePassword here
+      }
+    }
+  };
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newLength = Number(e.target.value);
+    setLength(newLength);
+    generatePassword(newLength, includeNumbers, includeSymbols, includeUppercase);
+  };
+
+  const handleCheckboxChange = (type: 'numbers' | 'symbols' | 'uppercase', checked: boolean) => {
+    let newNumbers = includeNumbers;
+    let newSymbols = includeSymbols;
+    let newUppercase = includeUppercase;
+
+    if (type === 'numbers') {
+        setIncludeNumbers(checked);
+        newNumbers = checked;
+    } else if (type === 'symbols') {
+        setIncludeSymbols(checked);
+        newSymbols = checked;
+    } else if (type === 'uppercase') {
+        setIncludeUppercase(checked);
+        newUppercase = checked;
+    }
+    
+    generatePassword(length, newNumbers, newSymbols, newUppercase);
+  };
+
+  const getStrengthColor = () => {
+    if (strength <= 2) return "bg-red-500";
+    if (strength <= 4) return "bg-yellow-500";
+    return "bg-green-500";
+  };
+
+  const getStrengthLabel = () => {
+    if (strength === 0) return "";
+    if (strength <= 2) return "弱";
+    if (strength <= 4) return "中";
+    return "强";
   };
 
   return (
@@ -52,27 +135,46 @@ export default function Home() {
 
         {/* Password Display */}
         <div className="relative mb-8 group">
-          <div className="flex h-16 w-full items-center justify-between rounded-xl bg-zinc-100 px-4 transition-colors group-hover:bg-zinc-50 ring-1 ring-transparent group-hover:ring-zinc-200">
-            <input
-              type="text"
-              value={password}
-              readOnly
-              className="w-full bg-transparent text-xl font-mono text-zinc-800 outline-none placeholder:text-zinc-400"
-              placeholder="Generating..."
-            />
-            <button
-              onClick={handleCopy}
-              className="ml-2 flex h-10 w-10 items-center justify-center rounded-lg text-zinc-500 hover:bg-white hover:text-zinc-900 hover:shadow-sm transition-all active:scale-95"
-              title="Copy to clipboard"
-            >
-              {copied ? (
-                <Check className="h-5 w-5 text-green-500" />
-              ) : (
-                <Copy className="h-5 w-5" />
-              )}
-            </button>
+          <div className="flex flex-col rounded-xl bg-zinc-100 px-4 py-2 transition-colors group-hover:bg-zinc-50 ring-1 ring-transparent group-hover:ring-zinc-200">
+            <div className="flex w-full items-center justify-between">
+              <input
+                type="text"
+                value={password}
+                onChange={handlePasswordChange}
+                className="w-full bg-transparent text-xl font-mono text-zinc-800 outline-none placeholder:text-zinc-400"
+                placeholder="输入或生成密码..."
+              />
+              <button
+                onClick={handleCopy}
+                className="ml-2 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-white hover:text-zinc-900 hover:shadow-sm transition-all active:scale-95"
+                title="Copy to clipboard"
+              >
+                {copied ? (
+                  <Check className="h-5 w-5 text-green-500" />
+                ) : (
+                  <Copy className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+            
+            {/* Strength Indicator */}
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex h-1 flex-1 gap-1 bg-zinc-200 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${getStrengthColor()}`} 
+                  style={{ width: `${Math.min(100, (strength / 6) * 100)}%` }}
+                />
+              </div>
+              <span className={`text-xs font-medium ${
+                strength <= 2 ? "text-red-500" : 
+                strength <= 4 ? "text-yellow-600" : "text-green-600"
+              }`}>
+                {getStrengthLabel()}
+              </span>
+            </div>
           </div>
-          {/* Tooltip/Status for Copy - optional but nice */}
+          
+          {/* Tooltip/Status for Copy */}
           {copied && (
             <div className="absolute -top-8 right-0 rounded bg-black px-2 py-1 text-xs text-white animate-fade-in-up">
               已复制
@@ -97,7 +199,7 @@ export default function Home() {
               min="8"
               max="32"
               value={length}
-              onChange={(e) => setLength(Number(e.target.value))}
+              onChange={handleSliderChange}
               className="h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-200 accent-black outline-none hover:bg-zinc-300"
             />
             <div className="mt-2 flex justify-between text-xs text-zinc-400">
@@ -113,7 +215,7 @@ export default function Home() {
                 <input
                   type="checkbox"
                   checked={includeNumbers}
-                  onChange={(e) => setIncludeNumbers(e.target.checked)}
+                  onChange={(e) => handleCheckboxChange('numbers', e.target.checked)}
                   className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-zinc-300 checked:bg-black checked:border-black transition-all"
                 />
                 <Check className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
@@ -128,7 +230,7 @@ export default function Home() {
                 <input
                   type="checkbox"
                   checked={includeSymbols}
-                  onChange={(e) => setIncludeSymbols(e.target.checked)}
+                  onChange={(e) => handleCheckboxChange('symbols', e.target.checked)}
                   className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-zinc-300 checked:bg-black checked:border-black transition-all"
                 />
                 <Check className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
@@ -143,7 +245,7 @@ export default function Home() {
                 <input
                   type="checkbox"
                   checked={includeUppercase}
-                  onChange={(e) => setIncludeUppercase(e.target.checked)}
+                  onChange={(e) => handleCheckboxChange('uppercase', e.target.checked)}
                   className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-zinc-300 checked:bg-black checked:border-black transition-all"
                 />
                 <Check className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
@@ -157,7 +259,7 @@ export default function Home() {
 
         {/* Generate Button */}
         <button
-          onClick={generatePassword}
+          onClick={() => generatePassword(length, includeNumbers, includeSymbols, includeUppercase)}
           className="mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-black text-white font-semibold shadow-lg shadow-zinc-900/10 transition-all hover:bg-zinc-800 hover:shadow-zinc-900/20 active:scale-[0.98]"
         >
           <RefreshCw className="h-5 w-5" />
