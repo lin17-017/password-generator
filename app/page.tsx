@@ -9,6 +9,7 @@ export default function Home() {
   const [includeNumbers, setIncludeNumbers] = useState(true);
   const [includeSymbols, setIncludeSymbols] = useState(true);
   const [includeUppercase, setIncludeUppercase] = useState(true);
+  const [includeLowercase, setIncludeLowercase] = useState(true);
   const [copied, setCopied] = useState(false);
   const [strength, setStrength] = useState(0);
 
@@ -35,28 +36,48 @@ export default function Home() {
     setStrength(calculateStrength(password));
   }, [password]);
 
-  // Modified to accept optional parameters for immediate updates
-  const generatePassword = useCallback((
-    len = length, 
-    incNum = includeNumbers, 
-    incSym = includeSymbols, 
-    incUpper = includeUppercase
+  // Core generation logic - separated from state
+  const generatePasswordLogic = (
+    len: number, 
+    incNum: boolean, 
+    incSym: boolean, 
+    incUpper: boolean, 
+    incLower: boolean
   ) => {
-    let charset = "abcdefghijklmnopqrstuvwxyz";
+    let charset = "";
+    if (incLower) charset += "abcdefghijklmnopqrstuvwxyz";
     if (incUpper) charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     if (incNum) charset += "0123456789";
     if (incSym) charset += "!@#$%^&*()_+~`|}{[]:;?><,./-=";
+
+    if (charset === "") return "";
 
     let newPassword = "";
     for (let i = 0; i < len; i++) {
       newPassword += charset.charAt(Math.floor(Math.random() * charset.length));
     }
-    setPassword(newPassword);
-  }, [length, includeNumbers, includeSymbols, includeUppercase]);
+    return newPassword;
+  };
+
+  // Wrapper to update state
+  const updatePassword = useCallback((
+    len = length, 
+    incNum = includeNumbers, 
+    incSym = includeSymbols, 
+    incUpper = includeUppercase,
+    incLower = includeLowercase
+  ) => {
+    const newPassword = generatePasswordLogic(len, incNum, incSym, incUpper, incLower);
+    if (newPassword) {
+      setPassword(newPassword);
+    }
+  }, [length, includeNumbers, includeSymbols, includeUppercase, includeLowercase]);
 
   // Generate ONLY on initial load
   useEffect(() => {
-    generatePassword(12, true, true, true);
+    // Initial generation
+    const initialPwd = generatePasswordLogic(12, true, true, true, true);
+    setPassword(initialPwd);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -76,7 +97,7 @@ export default function Home() {
       // Update length slider to match if within range
       if (newPassword.length >= 8 && newPassword.length <= 32) {
         setLength(newPassword.length);
-        // CRITICAL FIX: Do NOT call generatePassword here
+        // Do NOT regenerate password here
       }
     }
   };
@@ -84,13 +105,15 @@ export default function Home() {
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newLength = Number(e.target.value);
     setLength(newLength);
-    generatePassword(newLength, includeNumbers, includeSymbols, includeUppercase);
+    // Regenerate immediately when slider moves
+    updatePassword(newLength, includeNumbers, includeSymbols, includeUppercase, includeLowercase);
   };
 
-  const handleCheckboxChange = (type: 'numbers' | 'symbols' | 'uppercase', checked: boolean) => {
+  const handleCheckboxChange = (type: 'numbers' | 'symbols' | 'uppercase' | 'lowercase', checked: boolean) => {
     let newNumbers = includeNumbers;
     let newSymbols = includeSymbols;
     let newUppercase = includeUppercase;
+    let newLowercase = includeLowercase;
 
     if (type === 'numbers') {
         setIncludeNumbers(checked);
@@ -101,9 +124,13 @@ export default function Home() {
     } else if (type === 'uppercase') {
         setIncludeUppercase(checked);
         newUppercase = checked;
+    } else if (type === 'lowercase') {
+        setIncludeLowercase(checked);
+        newLowercase = checked;
     }
     
-    generatePassword(length, newNumbers, newSymbols, newUppercase);
+    // Regenerate immediately when checkbox toggles
+    updatePassword(length, newNumbers, newSymbols, newUppercase, newLowercase);
   };
 
   const getStrengthColor = () => {
@@ -214,6 +241,21 @@ export default function Home() {
               <div className="relative flex items-center">
                 <input
                   type="checkbox"
+                  checked={includeLowercase}
+                  onChange={(e) => handleCheckboxChange('lowercase', e.target.checked)}
+                  className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-zinc-300 checked:bg-black checked:border-black transition-all"
+                />
+                <Check className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+              </div>
+              <span className="text-sm font-medium text-zinc-700 select-none">
+                包含小写字母 (a-z)
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-100 p-3 transition-colors hover:bg-zinc-50 hover:border-zinc-200">
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
                   checked={includeNumbers}
                   onChange={(e) => handleCheckboxChange('numbers', e.target.checked)}
                   className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-zinc-300 checked:bg-black checked:border-black transition-all"
@@ -259,7 +301,7 @@ export default function Home() {
 
         {/* Generate Button */}
         <button
-          onClick={() => generatePassword(length, includeNumbers, includeSymbols, includeUppercase)}
+          onClick={() => updatePassword(length, includeNumbers, includeSymbols, includeUppercase, includeLowercase)}
           className="mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-black text-white font-semibold shadow-lg shadow-zinc-900/10 transition-all hover:bg-zinc-800 hover:shadow-zinc-900/20 active:scale-[0.98]"
         >
           <RefreshCw className="h-5 w-5" />
